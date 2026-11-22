@@ -24,8 +24,8 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Sync from upstream
-        id: sync
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote add upstream https://github.com/anhao/ai-pose-gallery-zh.git
@@ -33,26 +33,34 @@ jobs:
           BEFORE=$(git rev-parse HEAD)
           if git merge --no-edit upstream/main; then
             git push origin main
+            echo "merge ok, pushed"
           else
-            echo "SYNC_CONFLICT=1" >> $GITHUB_ENV
+            echo "SYNC_CONFLICT: please resolve manually"
             git merge --abort || true
+            exit 1
           fi
-          AFTER=$(git rev-parse HEAD)
-          echo "before=$BEFORE after=$AFTER"
-          echo "head=$AFTER" >> $GITHUB_OUTPUT
-          echo "changed=$([ "$BEFORE" = "$AFTER" ] && echo no || echo yes)" >> $GITHUB_OUTPUT
+          echo "before=$BEFORE after=$(git rev-parse HEAD)"
 
-      - name: Setup Node and pnpm
+      - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10
-      - uses: actions/setup-node@v4
+          version: 11
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
 
-      - name: Patch asset paths to /pose/ prefix
+      - name: Install dependencies
         run: |
+          set -e
+          cat pnpm-workspace.yaml
+          pnpm install --no-frozen-lockfile
+
+      - name: Patch asset paths to /pose/
+        run: |
+          set -e
           python3 - <<'PY'
           from pathlib import Path
           SEG = "/pose/"
@@ -75,25 +83,27 @@ jobs:
               if "base:" not in t:
                   t = t.replace("export default defineConfig({", "export default defineConfig({\n  base: '/pose/',")
                   vp.write_text(t, encoding="utf-8")
-          print("patched")
+          print("patch done")
           PY
 
       - name: Build site
         run: |
-          sed -i 's/esbuild: set this to true or false/esbuild: true/' pnpm-workspace.yaml
-          pnpm install --no-frozen-lockfile
+          set -e
           pnpm build
+          echo "build done, dist files: $(find dist -type f | wc -l)"
 
       - name: Prepare deploy artifact
         run: |
+          set -e
           rm -rf _deploy && mkdir -p _deploy
           cp -r dist/. _deploy/
           cp -r data _deploy/data
           cd _deploy && tar -czf ../site.tar.gz . && cd ..
           ls -lh site.tar.gz
 
-      - name: Publish artifact to deploy branch
+      - name: Publish artifact to pose-deploy branch
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           sha=$(git rev-parse HEAD | cut -c1-12)
@@ -101,7 +111,8 @@ jobs:
           git rm -rf . >/dev/null 2>&1 || true
           cp site.tar.gz .
           printf '%s\n' "$sha" > VERSION
-          printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > BUILD_TIME
+          date -u +%Y-%m-%dT%H:%M:%SZ > BUILD_TIME
           git add -f site.tar.gz VERSION BUILD_TIME
           git commit -m "deploy $sha"
           git push -f origin pose-deploy
+          echo "published pose-deploy $sha"
