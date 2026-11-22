@@ -114,3 +114,4 @@ DIST_FILES=28
 ARTIFACT_SIZE=1141873
 -rw-r--r-- 1 runner runner 1.1M Nov 22 04:57 site.tar.gz
 RUN_URL=https://github.com/fxfnfxy/ai-pose-gallery-zh/actions/runs/44987258228
+PUBLISH=OK 6ddeb9c87740
