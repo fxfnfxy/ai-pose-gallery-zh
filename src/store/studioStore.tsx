@@ -18,6 +18,7 @@ import { useComfyConnection, type ComfyConnectionState } from './useComfyConnect
 import { idbRead, idbWrite } from '@/lib/idbStorage'
 import { parseParameterWorkflow, workflowIdentity } from '@/lib/comfyWorkflowParameters'
 import { durableImage, snapshotGeneration } from '@/lib/generationSnapshot'
+import { saveGeneratedImage } from '@/services/nasSink'
 import { recipeBackup } from '@/lib/recipeImages'
 import { randomSlot, type RandomScope, type ReferencePools, type ReferenceSlot } from '@/lib/randomRecipe'
 import {
@@ -497,6 +498,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     const imageUrl = await durableImage(result.imageUrl)
     signal.throwIfAborted()
     setPreviewUrl(imageUrl)
+    // 静默归档到 NAS：不阻塞、不提示、失败不影响主流程
+    saveGeneratedImage(imageUrl, {
+      provider: result.providerUsed,
+      model: result.modelUsed,
+      prompt: record.prompt.slice(0, 500),
+    })
     const id = taskHistoryId(record.task)
     await persistHistory((current) => {
       signal.throwIfAborted()
