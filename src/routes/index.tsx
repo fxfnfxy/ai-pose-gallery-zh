@@ -86,7 +86,7 @@ function DashboardPage() {
             {posesData.groups.slice(0, 4).map((g) => (
               <img
                 key={g.key}
-                src={`/${g.order[0].缩略图}`}
+                src={`/pose/${g.order[0].缩略图}`}
                 alt={g.name}
                 loading="lazy"
                 className="aspect-3/4 w-full rounded-lg bg-background object-cover"
@@ -128,7 +128,7 @@ function DashboardPage() {
             {portraits.slice(0, 4).map((p) => (
               <img
                 key={p.id}
-                src={`/${p.缩略图}`}
+                src={`/pose/${p.缩略图}`}
                 alt={p.标题}
                 loading="lazy"
                 className="aspect-3/4 w-full rounded-lg bg-background object-cover"
@@ -164,7 +164,7 @@ function DashboardPage() {
               >
                 <div className="relative aspect-4/5 overflow-hidden">
                   <img
-                    src={`/${item.缩略图}`}
+                    src={`/pose/${item.缩略图}`}
                     alt={item.标题}
                     loading="lazy"
                     className="h-full w-full object-cover transition group-hover:scale-105"
@@ -204,7 +204,7 @@ function DashboardPage() {
         公开分享。新增二次元服装来自 たき AI · CharaDB，仅收录元数据，图片从来源站点读取，各素材适用各自条件。默认已开启「安全模式 (SFW)」隐藏 18+ 敏感分类，未满 18 周岁请勿关闭。本工具与素材
         <strong className="text-foreground">仅供个人学习与合法艺术创作使用，严禁用于任何违法违规或侵害他人肖像权用途</strong>。{' '}
         <Link to="/guide" className="font-medium text-primary underline">
-          查看完整免责声明 →
+          查看完整免责声明与 API 配置说明 →
         </Link>
       </footer>
     </>
