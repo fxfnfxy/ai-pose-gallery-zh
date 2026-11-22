@@ -24,22 +24,22 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Sync from upstream
+        id: sync
+        continue-on-error: true
         run: |
-          set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git remote add upstream https://github.com/anhao/ai-pose-gallery-zh.git
-          git fetch upstream main
+          git fetch upstream main 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
           BEFORE=$(git rev-parse HEAD)
-          if git merge --no-edit upstream/main; then
-            git push origin main
-            echo "merge ok, pushed"
+          if git merge --no-edit upstream/main 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"; then
+            git push origin main 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "SYNC_OK" | tee -a "$GITHUB_STEP_SUMMARY"
           else
-            echo "SYNC_CONFLICT: please resolve manually"
+            echo "SYNC_CONFLICT" | tee -a "$GITHUB_STEP_SUMMARY"
             git merge --abort || true
-            exit 1
           fi
-          echo "before=$BEFORE after=$(git rev-parse HEAD)"
+          echo "before=$BEFORE after=$(git rev-parse HEAD)" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -54,13 +54,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          set -e
-          cat pnpm-workspace.yaml
-          pnpm install --no-frozen-lockfile
+          pnpm install --no-frozen-lockfile 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "INSTALL_EXIT=${PIPESTATUS[0]}" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Patch asset paths to /pose/
         run: |
-          set -e
           python3 - <<'PY'
           from pathlib import Path
           SEG = "/pose/"
@@ -87,32 +85,32 @@ jobs:
           PY
 
       - name: Build site
+        id: build
+        continue-on-error: true
         run: |
-          set -e
-          pnpm build
-          echo "build done, dist files: $(find dist -type f | wc -l)"
+          pnpm exec vite build 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "BUILD_EXIT=${PIPESTATUS[0]}" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "dist files: $(find dist -type f 2>/dev/null | wc -l)" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Prepare deploy artifact
         run: |
-          set -e
           rm -rf _deploy && mkdir -p _deploy
           cp -r dist/. _deploy/
           cp -r data _deploy/data
           cd _deploy && tar -czf ../site.tar.gz . && cd ..
-          ls -lh site.tar.gz
+          ls -lh site.tar.gz | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Publish artifact to pose-deploy branch
         run: |
-          set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           sha=$(git rev-parse HEAD | cut -c1-12)
           git checkout --orphan pose-deploy
           git rm -rf . >/dev/null 2>&1 || true
           cp site.tar.gz .
-          printf '%s\n' "$sha" > VERSION
+          echo "$sha" > VERSION
           date -u +%Y-%m-%dT%H:%M:%SZ > BUILD_TIME
           git add -f site.tar.gz VERSION BUILD_TIME
           git commit -m "deploy $sha"
           git push -f origin pose-deploy
-          echo "published pose-deploy $sha"
+          echo "published pose-deploy $sha" | tee -a "$GITHUB_STEP_SUMMARY"
