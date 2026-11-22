@@ -123,15 +123,21 @@ jobs:
       - name: Publish artifact to pose-deploy branch
         continue-on-error: true
         run: |
+          sha=$(git rev-parse HEAD | cut -c1-12)
+          PUB_DIR=$(mktemp -d)
+          cp site.tar.gz "$PUB_DIR/"
+          echo "$sha" > "$PUB_DIR/VERSION"
+          date -u +%Y-%m-%dT%H:%M:%SZ > "$PUB_DIR/BUILD_TIME"
+          echo "RUN_URL=https://github.com/fxfnfxy/ai-pose-gallery-zh/actions/runs/$GITHUB_RUN_ID" > "$PUB_DIR/SOURCE"
+          cd "$PUB_DIR"
+          git init -q
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          sha=$(git rev-parse HEAD | cut -c1-12)
-          git checkout --orphan pose-deploy
-          git rm -rf . >/dev/null 2>&1 || true
-          cp site.tar.gz .
-          echo "$sha" > VERSION
-          date -u +%Y-%m-%dT%H:%M:%SZ > BUILD_TIME
-          git add -f site.tar.gz VERSION BUILD_TIME
-          git commit -m "deploy $sha"
-          git push -f origin pose-deploy
-          echo "PUBLISH=OK $sha" >> diag.txt
+          git add .
+          git commit -q -m "deploy $sha"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/fxfnfxy/ai-pose-gallery-zh.git" HEAD:pose-deploy
+          echo "PUBLISH=OK $sha" >> "$GITHUB_WORKSPACE/diag.txt"
+          cd "$GITHUB_WORKSPACE"
+          git add -f diag.txt
+          git commit -q -m "ci: publish result $GITHUB_RUN_ID" || true
+          git push -q origin main || true
