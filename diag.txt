@@ -56,3 +56,61 @@ DIST_FILES=28
 ARTIFACT_SIZE=1141875
 -rw-r--r-- 1 runner runner 1.1M Nov 22 04:55 site.tar.gz
 RUN_URL=https://github.com/fxfnfxy/ai-pose-gallery-zh/actions/runs/44987101666
+SYNC=OK before=e328d83346d5851e1bceabae52f65687dc19e752 after=e328d83346d5851e1bceabae52f65687dc19e752
+INSTALL_EXIT=0
++ react-dom 19.3.1
++ recharts 3.8.0
++ shadcn 4.23.0
++ sonner 2.0.8
++ tailwind-merge 3.7.0
++ tailwindcss 4.3.3
++ tw-animate-css 1.4.0
+
+devDependencies:
++ @tanstack/router-plugin 1.168.48
++ @types/node 24.19.2
++ @types/react 19.3.0
++ @types/react-dom 19.3.0
++ @vitejs/plugin-react 6.1.2
++ oxlint 1.90.0
++ tsx 4.23.15
++ typescript 7.0.2
++ vite 8.3.5
+
+Done in 3.8s using pnpm v11.28.13
+PATCH=OK
+BUILD_EXIT=0
+dist/index.html                                              4.25 kB │ gzip:  1.90 kB
+dist/assets/inter-vietnamese-wght-normal-CBcvBZtf.woff2     10.25 kB
+dist/assets/inter-greek-ext-wght-normal-DlzME5K_.woff2      11.23 kB
+dist/assets/inter-cyrillic-wght-normal-DqGufNeO.woff2       18.74 kB
+dist/assets/inter-greek-wght-normal-CkhJZR-_.woff2          18.99 kB
+dist/assets/inter-cyrillic-ext-wght-normal-BOeWTOD4.woff2   25.96 kB
+dist/assets/inter-latin-wght-normal-Dx4kXJAl.woff2          48.25 kB
+dist/assets/inter-latin-ext-wght-normal-DO1Apj_S.woff2      85.06 kB
+dist/assets/index-DLwdCuZW.css                             109.34 kB │ gzip: 18.34 kB
+dist/assets/PageHeader-BQkKRwlH.js                           0.56 kB │ gzip:  0.32 kB
+dist/assets/rolldown-runtime-WkwZ5CU-.js                     0.59 kB │ gzip:  0.36 kB
+dist/assets/EmptyState-Deyd1fc2.js                           0.63 kB │ gzip:  0.35 kB
+dist/assets/costumeSources-Mo5wwBRs.js                       1.15 kB │ gzip:  0.75 kB
+dist/assets/FormSection-DsFRcjmI.js                          1.49 kB │ gzip:  0.60 kB
+dist/assets/ComfyConnectionStatus-D84sgBZm.js                2.75 kB │ gzip:  1.22 kB
+dist/assets/select-C5evhVqK.js                               4.06 kB │ gzip:  1.40 kB
+dist/assets/guide-Cy0RccRS.js                                5.72 kB │ gzip:  2.45 kB
+dist/assets/routes-kDYwxC6T.js                               6.46 kB │ gzip:  2.39 kB
+dist/assets/settings-BNq-wI1S.js                             6.61 kB │ gzip:  3.02 kB
+dist/assets/dialog-E6Omm6fK.js                               6.92 kB │ gzip:  2.78 kB
+dist/assets/portraits-DWNngJwy.js                            9.40 kB │ gzip:  3.44 kB
+dist/assets/costumes-yl9Vu_mr.js                            13.33 kB │ gzip:  4.65 kB
+dist/assets/poses-CfgmxvsJ.js                               15.50 kB │ gzip:  4.57 kB
+dist/assets/studio-CUQ5ji3m.js                              65.58 kB │ gzip: 17.58 kB
+dist/assets/tanstack-vendor-DQvot646.js                    107.92 kB │ gzip: 35.81 kB
+dist/assets/index-B3nVAtby.js                              164.77 kB │ gzip: 54.35 kB
+dist/assets/ui-vendor-BkKs4UBF.js                          173.35 kB │ gzip: 53.74 kB
+dist/assets/react-vendor-AyOTluXZ.js                       218.75 kB │ gzip: 68.26 kB
+
+[32m✓ built in 1.14s[39m
+DIST_FILES=28
+ARTIFACT_SIZE=1141873
+-rw-r--r-- 1 runner runner 1.1M Nov 22 04:57 site.tar.gz
+RUN_URL=https://github.com/fxfnfxy/ai-pose-gallery-zh/actions/runs/44987258228
