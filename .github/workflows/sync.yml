@@ -24,7 +24,6 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Sync from upstream
-        continue-on-error: true
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -33,17 +32,17 @@ jobs:
           BEFORE=$(git rev-parse HEAD)
           if git merge --no-edit upstream/main; then
             git push origin main
-            echo "SYNC=OK before=$BEFORE after=$(git rev-parse HEAD)" >> diag.txt
+            echo "SYNC=OK before=$BEFORE after=$(git rev-parse HEAD)"
           else
-            echo "SYNC=CONFLICT" >> diag.txt
+            echo "SYNC=CONFLICT - 需要人工解决"
             git merge --abort || true
+            exit 1
           fi
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 11
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -51,16 +50,9 @@ jobs:
           cache: pnpm
 
       - name: Install dependencies
-        continue-on-error: true
-        run: |
-          pnpm install --no-frozen-lockfile > install.log 2>&1
-          rc=$?
-          echo "INSTALL_EXIT=$rc" >> diag.txt
-          tail -20 install.log >> diag.txt
-          exit $rc
+        run: pnpm install --no-frozen-lockfile
 
       - name: Patch asset paths to /pose/
-        continue-on-error: true
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -84,51 +76,30 @@ jobs:
               if "base:" not in t:
                   t = t.replace("export default defineConfig({", "export default defineConfig({\n  base: '/pose/',")
                   vp.write_text(t, encoding="utf-8")
-          print("patch done")
+          print("patched")
           PY
-          echo "PATCH=OK" >> diag.txt
 
       - name: Build site
-        continue-on-error: true
         run: |
-          pnpm exec vite build > build.log 2>&1
-          rc=$?
-          echo "BUILD_EXIT=$rc" >> diag.txt
-          tail -30 build.log >> diag.txt
-          echo "DIST_FILES=$(find dist -type f 2>/dev/null | wc -l)" >> diag.txt
-          exit $rc
+          pnpm exec vite build
+          echo "dist files: $(find dist -type f | wc -l)"
 
       - name: Prepare deploy artifact
-        continue-on-error: true
         run: |
           rm -rf _deploy && mkdir -p _deploy
           cp -r dist/. _deploy/
           cp -r data _deploy/data
           cd _deploy && tar -czf ../site.tar.gz . && cd ..
-          echo "ARTIFACT_SIZE=$(stat -c%s site.tar.gz)" >> diag.txt
-          ls -lh site.tar.gz >> diag.txt
-
-      - name: Write diagnostics
-        if: always()
-        continue-on-error: true
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          echo "RUN_URL=https://github.com/fxfnfxy/ai-pose-gallery-zh/actions/runs/$GITHUB_RUN_ID" >> diag.txt
-          git checkout main
-          git add -f diag.txt
-          git commit -m "ci: diagnostics $GITHUB_RUN_ID" || true
-          git push origin main || true
+          ls -lh site.tar.gz
 
       - name: Publish artifact to pose-deploy branch
-        continue-on-error: true
         run: |
           sha=$(git rev-parse HEAD | cut -c1-12)
           PUB_DIR=$(mktemp -d)
           cp site.tar.gz "$PUB_DIR/"
           echo "$sha" > "$PUB_DIR/VERSION"
           date -u +%Y-%m-%dT%H:%M:%SZ > "$PUB_DIR/BUILD_TIME"
-          echo "RUN_URL=https://github.com/fxfnfxy/ai-pose-gallery-zh/actions/runs/$GITHUB_RUN_ID" > "$PUB_DIR/SOURCE"
+          echo "https://github.com/fxfnfxy/ai-pose-gallery-zh/actions/runs/$GITHUB_RUN_ID" > "$PUB_DIR/SOURCE"
           cd "$PUB_DIR"
           git init -q
           git config user.name "github-actions[bot]"
@@ -136,8 +107,4 @@ jobs:
           git add .
           git commit -q -m "deploy $sha"
           git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/fxfnfxy/ai-pose-gallery-zh.git" HEAD:pose-deploy
-          echo "PUBLISH=OK $sha" >> "$GITHUB_WORKSPACE/diag.txt"
-          cd "$GITHUB_WORKSPACE"
-          git add -f diag.txt
-          git commit -q -m "ci: publish result $GITHUB_RUN_ID" || true
-          git push -q origin main || true
+          echo "published pose-deploy $sha"
