@@ -1,0 +1,107 @@
+name: Sync upstream and build NAS site
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pose-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync from upstream
+        id: sync
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/anhao/ai-pose-gallery-zh.git
+          git fetch upstream main
+          BEFORE=$(git rev-parse HEAD)
+          if git merge --no-edit upstream/main; then
+            git push origin main
+          else
+            echo "SYNC_CONFLICT=1" >> $GITHUB_ENV
+            git merge --abort || true
+          fi
+          AFTER=$(git rev-parse HEAD)
+          echo "before=$BEFORE after=$AFTER"
+          echo "head=$AFTER" >> $GITHUB_OUTPUT
+          echo "changed=$([ "$BEFORE" = "$AFTER" ] && echo no || echo yes)" >> $GITHUB_OUTPUT
+
+      - name: Setup Node and pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Patch asset paths to /pose/ prefix
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          SEG = "/pose/"
+          def rw(p, pairs):
+              if not p.exists(): return
+              t = p.read_text(encoding="utf-8"); n = t
+              for a,b in pairs: n = n.replace(a,b)
+              if n != t: p.write_text(n, encoding="utf-8")
+          rw(Path("src/api/gallery.ts"), [("'/data/", "'"+SEG+"data/"), ('"/data/', '"'+SEG+"data/")])
+          rw(Path("src/lib/recipeImages.ts"), [("? src : `/${src}`", "? src : `"+SEG+"${src}`")])
+          for r in ["index.tsx","poses.tsx","costumes.tsx","portraits.tsx","studio.tsx"]:
+              p = Path("src/routes")/r
+              if p.exists():
+                  t = p.read_text(encoding="utf-8")
+                  n = t.replace("src={`/${", "src={`"+SEG+"${").replace("href={`/${","href={`"+SEG+"${")
+                  if n != t: p.write_text(n, encoding="utf-8")
+          vp = Path("vite.config.ts")
+          if vp.exists():
+              t = vp.read_text(encoding="utf-8")
+              if "base:" not in t:
+                  t = t.replace("export default defineConfig({", "export default defineConfig({\n  base: '/pose/',")
+                  vp.write_text(t, encoding="utf-8")
+          print("patched")
+          PY
+
+      - name: Build site
+        run: |
+          sed -i 's/esbuild: set this to true or false/esbuild: true/' pnpm-workspace.yaml
+          pnpm install --no-frozen-lockfile
+          pnpm build
+
+      - name: Prepare deploy artifact
+        run: |
+          rm -rf _deploy && mkdir -p _deploy
+          cp -r dist/. _deploy/
+          cp -r data _deploy/data
+          cd _deploy && tar -czf ../site.tar.gz . && cd ..
+          ls -lh site.tar.gz
+
+      - name: Publish artifact to deploy branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          sha=$(git rev-parse HEAD | cut -c1-12)
+          git checkout --orphan pose-deploy
+          git rm -rf . >/dev/null 2>&1 || true
+          cp site.tar.gz .
+          printf '%s\n' "$sha" > VERSION
+          printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > BUILD_TIME
+          git add -f site.tar.gz VERSION BUILD_TIME
+          git commit -m "deploy $sha"
+          git push -f origin pose-deploy
