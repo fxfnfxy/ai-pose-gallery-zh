@@ -115,8 +115,17 @@ function buildProbe(provider: ImageProviderId, baseUrl: string, apiKey: string):
     }
     case 'zhipu':
       return { url: joinUrl(baseUrl, '/models'), headers: bearer, label: 'GET /models' }
+    case 'minimax': {
+      const v1 = /\/v\d+$/.test(baseUrl) ? baseUrl : `${baseUrl}/v1`
+      return { url: `${v1}/models`, headers: bearer, label: 'GET /v1/models' }
+    }
+    case 'doubao': {
+      const root = baseUrl.replace(/\/api\/v3$/, '')
+      const url = /\/api\/v3$/.test(baseUrl) ? `${baseUrl}/models` : `${root}/api/v3/models`
+      return { url, headers: bearer, label: 'GET /api/v3/models' }
+    }
     default:
-      // doubao / minimax / pixai：无公开的轻量模型列表接口
+      // pixai：未确认存在公开的模型列表接口，保持中性结论
       return null
   }
 }
