@@ -11,7 +11,7 @@
  */
 
 import type { ApiConfig, ImageProviderId } from '@/types/gallery'
-import { PROVIDER_META, testComfyConnection } from '@/services/aiGenerator'
+import { PROVIDER_META, proxyEndpoint, testComfyConnection } from '@/services/aiGenerator'
 
 export type ConnectionTestStatus = 'ok' | 'fail' | 'inconclusive'
 
@@ -111,7 +111,7 @@ function buildProbe(provider: ImageProviderId, baseUrl: string, apiKey: string):
       const url = root.includes('/compatible-mode')
         ? joinUrl(root, '/models')
         : `${root}/compatible-mode/v1/models`
-      return { url, headers: bearer, label: 'GET /compatible-mode/v1/models' }
+      return { url, headers: bearer, label: 'GET /compatible-mode/v1/models（仅验证 Key，生成走原生 API）' }
     }
     case 'zhipu':
       return { url: joinUrl(baseUrl, '/models'), headers: bearer, label: 'GET /models' }
@@ -203,23 +203,45 @@ export async function testProviderConnection(
     }
   }
 
-  // ---- 4) 发起轻量请求 ----
+  // ---- 4) 发起轻量请求（与生成请求同一条传输路径：开启代理时经代理端点转发） ----
+  const useProxy = !!config.useProxy
+  let fetchUrl = plan.url
+  let fetchHeaders: Record<string, string> = plan.headers
+  if (useProxy) {
+    fetchUrl = proxyEndpoint()
+    fetchHeaders = { ...plan.headers, 'x-target-url': plan.url }
+  }
+  const probeLabel = useProxy ? `${plan.label}（经代理）` : plan.label
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort('timeout'), TIMEOUT_MS)
   try {
-    const res = await fetch(plan.url, { method: 'GET', headers: plan.headers, signal: controller.signal })
+    const res = await fetch(fetchUrl, { method: 'GET', headers: fetchHeaders, signal: controller.signal })
     const body = await res.text().catch(() => '')
     const latencyMs = elapsed()
 
     if (res.ok) {
-      let hint = ''
+      // 代理不可用 / 网关错误时常返回 HTML 错误页：如实判为失败并给出指引
+      let json: any = null
       try {
-        const json = JSON.parse(body)
-        const list = json?.data ?? json?.models ?? json?.data?.models
-        if (Array.isArray(list)) hint = `，可见 ${list.length} 个模型`
+        json = JSON.parse(body)
       } catch {
-        /* 忽略解析失败 */
+        return {
+          status: 'fail',
+          provider,
+          httpStatus: res.status,
+          latencyMs,
+          message: useProxy
+            ? '代理端点不可用：代理返回了非 JSON 响应'
+            : '接口返回了非 JSON 响应',
+          detail: useProxy
+            ? `代理端点（${fetchUrl}）返回 HTTP ${res.status} 但响应不是 JSON。若本部署未提供代理服务，请关闭下方「服务端 CORS 代理」开关后重试（多数国内厂商支持浏览器直连）。`
+            : '目标地址返回了 HTML 或空响应，请核对接口地址。',
+          probe: probeLabel,
+        }
       }
+      let hint = ''
+      const list = json?.data ?? json?.models ?? json?.data?.models
+      if (Array.isArray(list)) hint = `，可见 ${list.length} 个模型`
       return {
         status: 'ok',
         provider,
@@ -227,12 +249,23 @@ export async function testProviderConnection(
         latencyMs,
         message: `连接成功（HTTP ${res.status}${hint}）`,
         detail: '鉴权通过，接口地址可达。',
-        probe: plan.label,
+        probe: probeLabel,
       }
     }
 
-    // 404 / 405：说明该厂商没有这个列表接口，不能据此判定配置有误
+    // 404 / 405：厂商没有该列表接口 → 中性结论；但若经代理收到，则代理本身不可用
     if (res.status === 404 || res.status === 405) {
+      if (useProxy) {
+        return {
+          status: 'fail',
+          provider,
+          httpStatus: res.status,
+          latencyMs,
+          message: `代理端点不可用（HTTP ${res.status}）`,
+          detail: '经代理探测失败，说明代理服务未部署或不可达。请关闭下方「服务端 CORS 代理」开关后重试。',
+          probe: probeLabel,
+        }
+      }
       return {
         status: 'inconclusive',
         provider,
@@ -240,7 +273,7 @@ export async function testProviderConnection(
         latencyMs,
         message: `接口可达，但 HTTP ${res.status}：该服务商未提供模型列表接口`,
         detail: '地址与鉴权未发现明显错误；请在合成台实际生成一次以最终确认。',
-        probe: plan.label,
+        probe: probeLabel,
       }
     }
 
@@ -255,7 +288,7 @@ export async function testProviderConnection(
           ? `鉴权失败（HTTP ${res.status}）：API Key 无效或无权限`
           : `连接失败（HTTP ${res.status}）`,
       detail: scrub(reason, apiKey) || '服务端未返回错误说明',
-      probe: plan.label,
+      probe: probeLabel,
     }
   } catch (err: any) {
     const aborted = err?.name === 'AbortError' || controller.signal.reason === 'timeout'
@@ -266,9 +299,11 @@ export async function testProviderConnection(
       latencyMs: elapsed(),
       message: aborted ? `请求超时（>${TIMEOUT_MS / 1000}s）` : isNetwork ? '网络请求失败' : '请求异常',
       detail: isNetwork
-        ? '浏览器未能完成请求，常见原因：接口地址有误、目标不可达，或被跨域 (CORS) 策略拦截。'
+        ? useProxy
+          ? '浏览器未能完成请求。当前经代理转发：若本部署未提供代理服务，请关闭「服务端 CORS 代理」开关后重试。'
+          : '浏览器未能完成请求，常见原因：接口地址有误、目标不可达，或被跨域 (CORS) 策略拦截。'
         : scrub(err?.message || String(err), apiKey),
-      probe: plan.label,
+      probe: probeLabel,
     }
   } finally {
     clearTimeout(timer)
