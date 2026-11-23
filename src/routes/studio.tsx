@@ -109,6 +109,7 @@ function StudioPage() {
     setPortrait,
     setCostume,
     setPose,
+    setFacelessDisplay,
     toggleRecipePoseDepth,
     addExtraImage,
     removeExtraImage,
@@ -1478,6 +1479,17 @@ function StudioPage() {
               </div>
             }
           >
+            {!recipe.portrait && (recipe.costume || recipe.pose) && (
+              <div className="flex h-9 items-center justify-between rounded-xl border bg-background px-3">
+                <div className="min-w-0">
+                  <span className="text-xs font-medium">无脸展示模式</span>
+                  <span className="ml-2 text-[11px] text-muted-foreground">
+                    {recipe.facelessDisplay ? '服装商品图风格：头部完整、仅面部无五官' : '关闭：生成头部与五官完整的普通人物'}
+                  </span>
+                </div>
+                <Switch checked={recipe.facelessDisplay === true} onCheckedChange={(v) => setFacelessDisplay(v)} />
+              </div>
+            )}
             <Textarea
               value={prompt}
               onChange={(e) => setCustomPrompt(e.target.value)}
