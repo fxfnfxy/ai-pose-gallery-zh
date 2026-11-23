@@ -88,6 +88,7 @@ interface StudioContextValue {
   setPortrait: (item: PortraitItem | null) => void
   setCostume: (item: CostumeItem | null) => void
   setPose: (item: PoseItem | null) => void
+  setFacelessDisplay: (val: boolean) => void
   togglePortrait: (item: PortraitItem) => void
   toggleCostume: (item: CostumeItem) => void
   togglePose: (item: PoseItem) => void
@@ -205,6 +206,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           portrait: savedRecipe.portrait ?? null,
           costume: savedRecipe.costume ?? null,
           pose: savedRecipe.pose ?? null,
+          facelessDisplay: savedRecipe.facelessDisplay === true,
           workflowImages: savedRecipe.workflowImages ?? {},
           workflowImagesIdentity: savedRecipe.workflowImagesIdentity,
           extraImages: Array.isArray(savedRecipe.extraImages) ? savedRecipe.extraImages : [],
@@ -279,6 +281,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const setPortrait = (portrait: PortraitItem | null) => setRecipe((r) => ({ ...r, portrait }))
   const setCostume = (costume: CostumeItem | null) => setRecipe((r) => ({ ...r, costume }))
   const setPose = (pose: PoseItem | null) => setRecipe((r) => ({ ...r, pose }))
+  const setFacelessDisplay = (val: boolean) => setRecipe((r) => ({ ...r, facelessDisplay: val }))
 
   const setPoseDepthMode = (val: boolean) => {
     setPoseDepthModeState(val)
@@ -645,6 +648,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
         setPortrait,
         setCostume,
         setPose,
+        setFacelessDisplay,
         togglePortrait,
         toggleCostume,
         togglePose,
