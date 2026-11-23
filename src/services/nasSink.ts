@@ -13,6 +13,8 @@
  * 由 NAS 上 `aipose/nas_save_server.py` 接收并落盘。
  */
 
+import { fetchRemoteImage } from '@/lib/imageFetch';
+
 const MAX_BYTES = 32 * 1024 * 1024;
 
 /** 简单去重：同一张图（按长度+头尾指纹）在短时间内不重复上传。 */
@@ -30,10 +32,9 @@ function endpoint(): string {
 async function toDataUrl(url: string): Promise<string | null> {
   if (url.startsWith('data:')) return url;
   try {
-    const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    if (!blob.type.startsWith('image/')) return null;
+    // 直连失败（如 OSS 仅回单张证书导致 Node/严格客户端 TLS 校验失败）时自动走 NAS 中转
+    const blob = await fetchRemoteImage(url);
+    if (blob.type && !blob.type.startsWith('image/')) return null;
     return await new Promise<string | null>((resolve) => {
       const reader = new FileReader();
       reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : null);
