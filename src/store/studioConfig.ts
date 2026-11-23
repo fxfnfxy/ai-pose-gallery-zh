@@ -39,6 +39,24 @@ export const DEFAULT_API_CONFIG: ApiConfig = {
       model: PROVIDER_META.doubao.models[0].value,
       customModel: '',
     },
+    zhipu: {
+      baseUrl: PROVIDER_META.zhipu.defaultBaseUrl,
+      apiKey: '',
+      model: PROVIDER_META.zhipu.models[0].value,
+      customModel: '',
+    },
+    minimax: {
+      baseUrl: PROVIDER_META.minimax.defaultBaseUrl,
+      apiKey: '',
+      model: PROVIDER_META.minimax.models[0].value,
+      customModel: '',
+    },
+    openai_compat: {
+      baseUrl: PROVIDER_META.openai_compat.defaultBaseUrl,
+      apiKey: '',
+      model: PROVIDER_META.openai_compat.models[0].value,
+      customModel: '',
+    },
     comfyui: {
       baseUrl: PROVIDER_META.comfyui.defaultBaseUrl,
       apiKey: '',
@@ -73,6 +91,23 @@ export const DEFAULT_API_CONFIG: ApiConfig = {
     sequentialImageGeneration: 'disabled',
     watermark: false,
     responseFormat: 'b64_json',
+  },
+  zhipuParams: {
+    size: '720x1440',
+    quality: 'hd',
+  },
+  minimaxParams: {
+    aspectRatio: '3:4',
+    responseFormat: 'url',
+    promptOptimizer: true,
+    useSubjectReference: false,
+  },
+  openaiCompatParams: {
+    size: 'auto',
+    n: 1,
+    responseFormat: 'url',
+    negativePrompt: '',
+    sendReferenceImage: true,
   },
   comfyuiParams: {
     workflowPreset: DEFAULT_COMFY_PRESET,
@@ -134,6 +169,9 @@ export function mergeStoredConfig(raw: unknown): ApiConfig {
       gpt: { ...DEFAULT_API_CONFIG.providers.gpt, ...obj.providers?.gpt },
       qwen: { ...DEFAULT_API_CONFIG.providers.qwen, ...obj.providers?.qwen },
       doubao: { ...DEFAULT_API_CONFIG.providers.doubao, ...obj.providers?.doubao },
+      zhipu: { ...DEFAULT_API_CONFIG.providers.zhipu, ...obj.providers?.zhipu },
+      minimax: { ...DEFAULT_API_CONFIG.providers.minimax, ...obj.providers?.minimax },
+      openai_compat: { ...DEFAULT_API_CONFIG.providers.openai_compat, ...obj.providers?.openai_compat },
       pixai: { ...DEFAULT_API_CONFIG.providers.pixai, ...obj.providers?.pixai, model: PIXAI_MODELS.some((entry) => entry.value === obj.providers?.pixai?.model) ? obj.providers!.pixai.model : PIXAI_MODEL, customModel: '' },
       comfyui: comfy.provider,
     },
@@ -141,6 +179,9 @@ export function mergeStoredConfig(raw: unknown): ApiConfig {
     geminiParams: { ...DEFAULT_API_CONFIG.geminiParams, ...obj.geminiParams },
     qwenParams: { ...DEFAULT_API_CONFIG.qwenParams, ...obj.qwenParams },
     doubaoParams: { ...DEFAULT_API_CONFIG.doubaoParams, ...obj.doubaoParams },
+    zhipuParams: { ...DEFAULT_API_CONFIG.zhipuParams, ...obj.zhipuParams },
+    minimaxParams: { ...DEFAULT_API_CONFIG.minimaxParams, ...obj.minimaxParams },
+    openaiCompatParams: { ...DEFAULT_API_CONFIG.openaiCompatParams, ...obj.openaiCompatParams },
     pixaiParams: { ...DEFAULT_PIXAI_PARAMS, ...obj.pixaiParams, mode: obj.providers?.pixai?.model !== '2050048243034896798' && ['default', 'pro', 'ultra'].includes(obj.pixaiParams?.mode || '') ? obj.pixaiParams!.mode : 'default' },
     comfyuiParams: comfy.params,
   }
