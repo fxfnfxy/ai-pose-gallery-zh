@@ -80,7 +80,17 @@ export const Route = createFileRoute('/studio')({
   component: StudioPage,
 })
 
-const PROVIDER_LIST: ImageProviderId[] = ['gemini', 'gpt', 'qwen', 'doubao', 'pixai', 'comfyui']
+const PROVIDER_LIST: ImageProviderId[] = [
+  'gemini',
+  'gpt',
+  'qwen',
+  'doubao',
+  'zhipu',
+  'minimax',
+  'openai_compat',
+  'pixai',
+  'comfyui',
+]
 
 function StudioPage() {
   const {
