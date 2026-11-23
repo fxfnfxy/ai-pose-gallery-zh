@@ -10,7 +10,9 @@ export const shouldEnableProxyByDefault = (provider?: ImageProviderId) => provid
 
 export const DEFAULT_API_CONFIG: ApiConfig = {
   activeProvider: 'gemini',
-  imagePassMode: 'url',
+  // base64 为默认：URL 模式要求 API 服务端能公网访问参考图地址，实测中
+  // pages.dev 源站域名失效、阿里云服务端下载自签证书站均会导致生成失败
+  imagePassMode: 'base64',
   useProxy: false,
   stylePreset: 'realistic',
   sendStitchedSheet: false,
@@ -155,6 +157,10 @@ export function mergeStoredConfig(raw: unknown): ApiConfig {
     { ...DEFAULT_API_CONFIG.comfyuiParams, configVersion: 1, ...obj.comfyuiParams }
   )
   const activeProvider = obj.activeProvider ?? DEFAULT_API_CONFIG.activeProvider
+  // 一次性迁移：历史版本默认 'url' 被写进 localStorage，但 URL 模式在真实环境中
+  // 频繁失败（参考图 URL 域名失效 / API 服务端无法下载）。统一迁回 base64，
+  // 设置页仍可手动切回 URL 模式。
+  const imagePassMode = 'base64' as const
   // v3 起服务端 CORS 代理默认关闭；qwen/doubao 支持 CORS 直连不再自动开启，仅 pixai 保留自动开启
   const useProxy =
     storedVer < 3
@@ -165,6 +171,7 @@ export function mergeStoredConfig(raw: unknown): ApiConfig {
     ...obj,
     activeProvider,
     useProxy,
+    imagePassMode,
     providers: {
       gemini: { ...DEFAULT_API_CONFIG.providers.gemini, ...obj.providers?.gemini },
       gpt: { ...DEFAULT_API_CONFIG.providers.gpt, ...obj.providers?.gpt },
