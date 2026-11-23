@@ -325,11 +325,11 @@ function SettingsPage() {
 
           <Field
             label="服务端 CORS 代理 (/api/proxy)"
-            hint="默认关闭（浏览器直连）；切换到阿里云百炼 (Qwen)、火山方舟 (Doubao) 或 PixAI 时会自动开启。仅支持白名单域名（可通过服务端环境变量 PROXY_ALLOWED_ORIGINS 扩展）"
+            hint="默认关闭（浏览器直连）；切换到 PixAI 时自动开启。Qwen 与 Doubao 支持直连，无需代理。注意：自托管部署（如 NAS）未提供代理服务，开启后请求会失败，「测试连接」会如实报错"
           >
             <div className="flex h-9 items-center justify-between rounded-xl border bg-background px-3">
               <span className="text-xs text-muted-foreground">
-                {apiConfig.useProxy ? '已启用（解决跨域限制）' : '已关闭（浏览器直连）'}
+                {apiConfig.useProxy ? '已启用（请求经 api/proxy 转发）' : '已关闭（浏览器直连）'}
               </span>
               <Switch
                 checked={apiConfig.useProxy}
