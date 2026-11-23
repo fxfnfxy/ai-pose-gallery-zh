@@ -4,8 +4,9 @@ import { DEFAULT_PIXAI_PARAMS, PIXAI_MODEL, PIXAI_MODELS } from '@/services/pixa
 
 const COMFY_CONFIG_VERSION = 3
 
-export const shouldEnableProxyByDefault = (provider?: ImageProviderId) =>
-  provider === 'qwen' || provider === 'doubao' || provider === 'pixai'
+// qwen（dashscope）与 doubao（火山方舟）经实测均支持浏览器 CORS 直连（预检放行），
+// 自动开代理反而在未部署代理端点的环境（如自托管 NAS）导致生成收到 HTML 错误页 → 仅 pixai 保留
+export const shouldEnableProxyByDefault = (provider?: ImageProviderId) => provider === 'pixai'
 
 export const DEFAULT_API_CONFIG: ApiConfig = {
   activeProvider: 'gemini',
@@ -154,7 +155,7 @@ export function mergeStoredConfig(raw: unknown): ApiConfig {
     { ...DEFAULT_API_CONFIG.comfyuiParams, configVersion: 1, ...obj.comfyuiParams }
   )
   const activeProvider = obj.activeProvider ?? DEFAULT_API_CONFIG.activeProvider
-  // v3 起服务端 CORS 代理默认关闭，仅在切换到 Qwen / Doubao 时自动关联开启
+  // v3 起服务端 CORS 代理默认关闭；qwen/doubao 支持 CORS 直连不再自动开启，仅 pixai 保留自动开启
   const useProxy =
     storedVer < 3
       ? shouldEnableProxyByDefault(activeProvider)
