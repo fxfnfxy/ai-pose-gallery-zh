@@ -80,6 +80,8 @@ export interface RecipeState {
   portrait: PortraitItem | null
   costume: CostumeItem | null
   pose: PoseItem | null
+  /** 无脸展示模式（服装商品图风格）：仅面部无五官，头部仍完整。默认关闭。 */
+  facelessDisplay?: boolean
   workflowImages?: Record<string, ExtraReferenceImage>
   workflowImagesIdentity?: string
   extraImages?: ExtraReferenceImage[]
