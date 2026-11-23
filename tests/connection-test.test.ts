@@ -138,3 +138,75 @@ test('网络层异常提示可能为跨域拦截，且不泄露密钥', async ()
     }
   )
 })
+
+test('开启代理时探活经代理端点转发（与生成同路径），并携带 x-target-url', async () => {
+  const seen: { url: string; headers: Record<string, string> }[] = []
+  const original = globalThis.fetch
+  globalThis.fetch = (async (input: any, init: any) => {
+    seen.push({ url: String(input), headers: Object.fromEntries(new Headers(init?.headers).entries()) })
+    return new Response(JSON.stringify({ data: [] }), { status: 200 })
+  }) as typeof fetch
+  try {
+    const cfg = { ...configWith('qwen'), useProxy: true }
+    const r = await testProviderConnection('qwen', cfg)
+    assert.equal(r.status, 'ok')
+    assert.equal(seen.length, 1)
+    assert.ok(seen[0].url.endsWith('/api/proxy'), `应请求代理端点，实际 ${seen[0].url}`)
+    assert.ok(seen[0].headers['x-target-url'].startsWith('https://dashscope.aliyuncs.com/'))
+    assert.match(r.probe || '', /经代理/)
+  } finally {
+    globalThis.fetch = original
+  }
+})
+
+test('代理返回 HTML 错误页（405）时如实判为失败并指引关闭代理', async () => {
+  await withFetch(
+    async () =>
+      new Response('<html><head><title>405 Not Allowed</title></head></html>', {
+        status: 405,
+        headers: { 'Content-Type': 'text/html' },
+      }),
+    async () => {
+      const cfg = { ...configWith('qwen'), useProxy: true }
+      const r = await testProviderConnection('qwen', cfg)
+      assert.equal(r.status, 'fail')
+      assert.match(r.message, /代理端点不可用/)
+      assert.match(r.detail || '', /关闭.*CORS 代理/)
+    }
+  )
+})
+
+test('代理返回 200 但内容为 HTML 时判为失败（不再误报连接成功）', async () => {
+  await withFetch(
+    async () =>
+      new Response('<!DOCTYPE html><html><body>fallback</body></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      }),
+    async () => {
+      const cfg = { ...configWith('zhipu'), useProxy: true }
+      const r = await testProviderConnection('zhipu', cfg)
+      assert.equal(r.status, 'fail')
+      assert.match(r.message, /代理|非 JSON/)
+    }
+  )
+})
+
+test('qwen 探活对 compatible-mode 形态的 Base URL 不会重复拼接路径', async () => {
+  const seen: string[] = []
+  const original = globalThis.fetch
+  globalThis.fetch = (async (input: any) => {
+    seen.push(String(input))
+    return new Response(JSON.stringify({ data: [] }), { status: 200 })
+  }) as typeof fetch
+  try {
+    await testProviderConnection(
+      'qwen',
+      configWith('qwen', { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' })
+    )
+    assert.equal(seen.length, 1)
+    assert.equal(seen[0], 'https://dashscope.aliyuncs.com/compatible-mode/v1/models')
+  } finally {
+    globalThis.fetch = original
+  }
+})
