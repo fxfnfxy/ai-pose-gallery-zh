@@ -3,6 +3,7 @@ import type { ApiConfig, ExtraReferenceImage, ImageProviderId, RecipeState } fro
 import { getGptInputFidelity } from '@/lib/gptImageCapabilities'
 import { applyWorkflowOverrides, getWorkflowImages, validateReferenceCombinations, workflowIdentity, type ComfyObjectInfo } from '@/lib/comfyWorkflowParameters'
 import { poseImagePath, referenceImageUrl } from '@/lib/recipeImages'
+import { fetchRemoteImage } from '@/lib/imageFetch'
 import qwen2509ThreeImageWorkflow from '@/workflows/qwen_image_edit_2509_3img.api.json'
 
 export interface ProviderModelOption {
@@ -421,9 +422,33 @@ export function toPublicHttpsUrl(src: string): string {
   return `https://ai-pose-gallery.pages.dev/${clean}`
 }
 
-async function srcToPngDataUrl(src: string): Promise<string> {
-  if (src.startsWith('data:image/')) return src
-  const img = await loadImage(src)
+/** 已知失效的参考图源站域名（历史版本曾把本地路径映射到这里） */
+const DEAD_IMAGE_HOSTS = ['ai-crafture-gallery.pages.dev']
+
+/**
+ * 参考图加载失败时的候选回退地址：取文件名，尝试本站图库的常见路径。
+ * 例如 https://ai-crafture-gallery.pages.dev/img/costumes/SUM-0258.webp
+ * → img/costume/SUM-0258.webp（本站同源图库已本地化同名文件）。
+ */
+export function fallbackCandidatesFor(src: string): string[] {
+  let pathname: string
+  try {
+    pathname = new URL(src, 'https://placeholder.local').pathname
+  } catch {
+    return []
+  }
+  if (!/^https?:/i.test(src)) return []
+  const base = pathname.split('/').pop() || ''
+  if (!/\.(webp|jpe?g|png)$/i.test(base)) return []
+  const lower = base.toLowerCase()
+  const out: string[] = []
+  for (const candidate of [`img/costume/${lower}`, `thumbs/costume/${lower}`, `img/${lower}`, `thumbs/${lower}`]) {
+    if (!out.includes(candidate)) out.push(candidate)
+  }
+  return out
+}
+
+async function imageToPngDataUrl(img: HTMLImageElement): Promise<string> {
   const maxSide = 1024
   const scale = Math.min(1, maxSide / Math.max(img.width, img.height))
   const c = document.createElement('canvas')
@@ -431,6 +456,49 @@ async function srcToPngDataUrl(src: string): Promise<string> {
   c.height = Math.round(img.height * scale)
   c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
   return c.toDataURL('image/png')
+}
+
+/**
+ * 参考图 → PNG dataURL。加载顺序：
+ * 1. 原地址（浏览器 <img> 直载，同源/跨域均可）
+ * 2. 直连/NAS 服务端中转取图（fetchRemoteImage：证书链降级 + 域名白名单）
+ * 3. 已知失效域名 → 按文件名回退本站图库候选路径
+ * 全部失败时抛出明确的中文错误，提示重新选择参考图。
+ */
+async function srcToPngDataUrl(src: string): Promise<string> {
+  if (src.startsWith('data:image/')) return src
+
+  const host = (() => { try { return new URL(src).hostname } catch { return '' } })()
+  const candidates: string[] = [src]
+  if (DEAD_IMAGE_HOSTS.some((h) => host.endsWith(h))) {
+    candidates.push(...fallbackCandidatesFor(src))
+  }
+
+  let lastError: unknown = null
+  for (const candidate of candidates) {
+    // 途径 A：浏览器 <img> 直载
+    try {
+      const img = await loadImage(candidate)
+      return await imageToPngDataUrl(img)
+    } catch (err) { lastError = err }
+    // 途径 B：程序化取图（含 NAS 服务端中转回退），再经 objectURL 解码
+    if (/^https?:\/\//i.test(candidate)) {
+      try {
+        const blob = await fetchRemoteImage(candidate)
+        const objectUrl = URL.createObjectURL(blob)
+        try {
+          const img = await loadImage(objectUrl)
+          return await imageToPngDataUrl(img)
+        } finally { URL.revokeObjectURL(objectUrl) }
+      } catch (err) { lastError = err }
+    }
+  }
+
+  throw new Error(
+    `参考图无法加载（地址可能已失效）：${src}。` +
+    '请取消该参考图后重新从图库选择，或改用「上传本地图」。' +
+    (lastError instanceof Error ? `（内部原因：${lastError.message}）` : '')
+  )
 }
 
 function dataUrlToBlob(dataUrl: string): Blob {
