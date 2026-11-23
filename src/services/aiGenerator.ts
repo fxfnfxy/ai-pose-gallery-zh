@@ -442,6 +442,30 @@ function dataUrlToBlob(dataUrl: string): Blob {
   return new Blob([arr], { type: mime })
 }
 
+/** 代理端点：跟随构建 base（如部署在 /pose/ 子路径时为 /pose/api/proxy），避免打到站点根路径 */
+export function proxyEndpoint(): string {
+  const base: string = (import.meta as any).env?.BASE_URL ?? '/'
+  return `${base.endsWith('/') ? base : `${base}/`}api/proxy`
+}
+
+/** 解析 JSON 响应；非 JSON / 空响应时抛出含诊断信息的明确错误，替代晦涩的 SyntaxError */
+async function parseJsonResponse(res: Response): Promise<any> {
+  const text = await res.text().catch(() => '')
+  if (!text.trim()) {
+    throw new Error(
+      `服务端返回了空响应（HTTP ${res.status}）：通常是接口地址路径不正确，或所配置的 CORS 代理不可用。请用配置页「测试连接」复核。`
+    )
+  }
+  try {
+    return JSON.parse(text)
+  } catch {
+    const head = text.slice(0, 140).replace(/\s+/g, ' ').trim()
+    throw new Error(
+      `服务端返回了非 JSON 响应（HTTP ${res.status}${res.headers.get('content-type') ? `，类型 ${res.headers.get('content-type')}` : ''}）：${head}`
+    )
+  }
+}
+
 async function smartFetch(
   targetUrl: string,
   init: RequestInit,
@@ -452,7 +476,7 @@ async function smartFetch(
   }
   const headers = new Headers(init.headers)
   headers.set('x-target-url', targetUrl)
-  return fetch('/api/proxy', {
+  return fetch(proxyEndpoint(), {
     method: init.method || 'POST',
     headers,
     body: init.body,
@@ -1681,7 +1705,7 @@ export async function generateCharacterImage(params: {
         },
         config.useProxy
       )
-      json = await res.json()
+      json = await parseJsonResponse(res)
     } else if (g.endpointMode === 'images_edits') {
       // 传统 /v1/images/edits (multipart/form-data 二进制文件上传)
       const fd = new FormData()
@@ -1706,7 +1730,7 @@ export async function generateCharacterImage(params: {
         },
         config.useProxy
       )
-      json = await res.json()
+      json = await parseJsonResponse(res)
     } else if (g.endpointMode === 'responses') {
       // OpenAI Responses API (/v1/responses) 支持直接传 HTTPS image_url 或 Base64
       const inputContent = [
@@ -1736,7 +1760,7 @@ export async function generateCharacterImage(params: {
         },
         config.useProxy
       )
-      json = await res.json()
+      json = await parseJsonResponse(res)
     } else {
       // 兼容中转站 Chat Completions，支持直接传 HTTPS URL
       const content = [
@@ -1759,7 +1783,7 @@ export async function generateCharacterImage(params: {
         },
         config.useProxy
       )
-      json = await res.json()
+      json = await parseJsonResponse(res)
     }
   }
   // =========================================================================
@@ -1802,7 +1826,7 @@ export async function generateCharacterImage(params: {
         },
         config.useProxy
       )
-      json = await res.json()
+      json = await parseJsonResponse(res)
     } else {
       const v1 = baseUrl.endsWith('/v1') ? baseUrl : `${baseUrl}/v1`
       const content = [
@@ -1825,7 +1849,7 @@ export async function generateCharacterImage(params: {
         },
         config.useProxy
       )
-      json = await res.json()
+      json = await parseJsonResponse(res)
     }
   }
   // =========================================================================
@@ -1833,9 +1857,14 @@ export async function generateCharacterImage(params: {
   // =========================================================================
   else if (provider === 'qwen') {
     const qw = config.qwenParams
-    const endpoint = baseUrl.includes('/services/aigc/')
-      ? baseUrl
-      : `${baseUrl.replace(/\/api\/v1$/, '')}/api/v1/services/aigc/multimodal-generation/generation`
+    // Base URL 容错：用户可能粘贴兼容模式地址（…/compatible-mode/v1），统一归一化为原生 API 根
+    const root = baseUrl
+      .replace(/\/+$/, '')
+      .replace(/\/compatible-mode(?:\/v\d+)?$/i, '')
+      .replace(/\/api\/v1$/i, '')
+    const endpoint = root.includes('/services/aigc/')
+      ? root
+      : `${root}/api/v1/services/aigc/multimodal-generation/generation`
 
     // Qwen-Image 原生支持直接传入公网 HTTPS URL 或 Base64 Data URL: {"image": "https://..."}
     const content = [
@@ -1872,7 +1901,7 @@ export async function generateCharacterImage(params: {
       },
       config.useProxy
     )
-    json = await res.json()
+    json = await parseJsonResponse(res)
   }
   // =========================================================================
   // 协议 5: 智谱 GLM / CogView (open.bigmodel.cn /api/paas/v4/images/generations)
@@ -1898,7 +1927,7 @@ export async function generateCharacterImage(params: {
       },
       config.useProxy
     )
-    json = await res.json()
+    json = await parseJsonResponse(res)
   }
   // =========================================================================
   // 协议 6: MiniMax image-01 (api.minimax.cn /v1/image_generation)
@@ -1932,7 +1961,7 @@ export async function generateCharacterImage(params: {
       },
       config.useProxy
     )
-    json = await res.json()
+    json = await parseJsonResponse(res)
     if (res.ok) {
       const urls = json?.data?.image_urls
       if (Array.isArray(urls) && urls.length) {
@@ -1980,7 +2009,7 @@ export async function generateCharacterImage(params: {
       },
       config.useProxy
     )
-    json = await res.json()
+    json = await parseJsonResponse(res)
   }
   // =========================================================================
   // 协议 4: 字节火山方舟 Doubao Seedream (/api/v3/images/generations)
@@ -2016,7 +2045,7 @@ export async function generateCharacterImage(params: {
       },
       config.useProxy
     )
-    json = await res.json()
+    json = await parseJsonResponse(res)
   }
 
   if (!res.ok) {
