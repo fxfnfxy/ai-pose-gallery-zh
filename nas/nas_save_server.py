@@ -81,6 +81,7 @@ FETCH_ALLOWED_SUFFIXES = (
     ".bigmodel.cn",
     ".minimaxi.com",    # MiniMax
     ".minimax.chat",
+    ".pages.dev",       # Cloudflare Pages：pose 图库源站（参考图跨域中转）
     ".modelscope.cn",
 )
 
