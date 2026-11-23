@@ -75,7 +75,7 @@ test('ComfyUI 的 API Key 为可选项，不参与必填校验', () => {
 })
 
 test('无轻量探活接口的厂商返回 inconclusive（不误判为失败）', async () => {
-  const r = await testProviderConnection('doubao', configWith('doubao'))
+  const r = await testProviderConnection('pixai', configWith('pixai'))
   assert.equal(r.status, 'inconclusive')
   assert.match(r.detail || '', /实际生成一次/)
 })
