@@ -85,7 +85,16 @@ export interface RecipeState {
   extraImages?: ExtraReferenceImage[]
 }
 
-export type ImageProviderId = 'gemini' | 'gpt' | 'qwen' | 'doubao' | 'comfyui' | 'pixai'
+export type ImageProviderId =
+  | 'gemini'
+  | 'gpt'
+  | 'qwen'
+  | 'doubao'
+  | 'zhipu'
+  | 'minimax'
+  | 'openai_compat'
+  | 'comfyui'
+  | 'pixai'
 
 export interface ProviderEndpointConfig {
   baseUrl: string
@@ -158,6 +167,31 @@ export interface PixAiParams {
   seed?: number
 }
 
+/** 智谱 GLM / CogView：官方仅提供文生图（不支持参考图） */
+export interface ZhipuParams {
+  size: '720x1440' | '1024x1024' | '1280x1280' | '1440x720'
+  quality: 'hd' | 'standard'
+}
+
+/** MiniMax image-01：支持单张 subject_reference 参考图 */
+export interface MiniMaxParams {
+  aspectRatio: '1:1' | '16:9' | '4:3' | '3:2' | '2:3' | '3:4' | '9:16' | '21:9'
+  responseFormat: 'url' | 'base64'
+  promptOptimizer: boolean
+  /** 是否把首张参考图作为 subject_reference 发送 */
+  useSubjectReference: boolean
+}
+
+/** OpenAI 兼容生图（自定义中转 / 硅基流动 / 百度千帆 / 腾讯混元等） */
+export interface OpenAiCompatParams {
+  size: string
+  n: number
+  responseFormat: 'url' | 'b64_json'
+  negativePrompt: string
+  /** 是否尝试以 image 字段附带参考图（取决于厂商兼容层是否支持） */
+  sendReferenceImage: boolean
+}
+
 export interface ApiConfig {
   activeProvider: ImageProviderId
   imagePassMode: ImagePassMode
@@ -169,6 +203,9 @@ export interface ApiConfig {
   geminiParams: GeminiParams
   qwenParams: QwenParams
   doubaoParams: DoubaoParams
+  zhipuParams: ZhipuParams
+  minimaxParams: MiniMaxParams
+  openaiCompatParams: OpenAiCompatParams
   pixaiParams: PixAiParams
   comfyuiParams: ComfyUiParams
 }
