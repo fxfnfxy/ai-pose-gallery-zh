@@ -317,8 +317,8 @@ function SettingsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="url">传递图片 URL（免上传文件，推荐）</SelectItem>
-                <SelectItem value="base64">转 Base64 编码传输</SelectItem>
+                <SelectItem value="base64">转 Base64 编码传输（推荐，浏览器先取参考图）</SelectItem>
+                <SelectItem value="url">传递图片 URL（要求 API 服务端能公网访问参考图地址）</SelectItem>
               </SelectContent>
             </Select>
           </Field>}
