@@ -4,11 +4,12 @@ import {
   ExternalLinkIcon,
   EyeIcon,
   EyeOffIcon,
+  PlugZapIcon,
   RotateCcwIcon,
   ScanSearchIcon,
   SparklesIcon,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from '@/lib/notifications'
 import { Field, Section } from '@/components/common/FormSection'
 import { PageHeader } from '@/components/common/PageHeader'
@@ -17,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { detectComfyUi, PROVIDER_META } from '@/services/aiGenerator'
+import { testProviderConnection, type ConnectionTestResult } from '@/services/connectionTest'
 import { useStudio } from '@/store/studioStore'
 import type { ImagePassMode, ImageProviderId } from '@/types/gallery'
 import { ComfyConnectionStatus } from '@/components/studio/ComfyConnectionStatus'
@@ -27,7 +29,24 @@ export const Route = createFileRoute('/settings')({
   component: SettingsPage,
 })
 
-const PROVIDER_ORDER: ImageProviderId[] = ['gemini', 'gpt', 'qwen', 'doubao', 'pixai', 'comfyui']
+const PROVIDER_ORDER: ImageProviderId[] = [
+  'gemini',
+  'gpt',
+  'qwen',
+  'doubao',
+  'zhipu',
+  'minimax',
+  'openai_compat',
+  'pixai',
+  'comfyui',
+]
+
+/** 各厂商的能力边界说明（避免用户配置后才发现不支持参考图） */
+const PROVIDER_NOTES: Partial<Record<ImageProviderId, string>> = {
+  zhipu: '智谱官方仅提供文生图（glm-image / cogview-4），不支持参考图；选中的人像、服装、姿势会以文字描述方式写入提示词，不上传图片。',
+  minimax: 'MiniMax image-01 支持单张参考图：开启「发送参考图」后仅发送第一张（优先人像）。',
+  openai_compat: '兼容 OpenAI /v1/images/generations 协议，同时下发 size 与 image_size 以兼容硅基流动。参考图需所选模型支持（如 Qwen-Image-Edit 系列）。',
+}
 
 function SettingsPage() {
   const { apiConfig, updateApiConfig, updateProviderConfig, comfyConnection } = useStudio()
@@ -37,6 +56,28 @@ function SettingsPage() {
   const pid = apiConfig.activeProvider
   const meta = PROVIDER_META[pid]
   const pCfg = apiConfig.providers[pid]
+
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<ConnectionTestResult | null>(null)
+
+  // 切换厂商后清空上一次结果，避免把 A 的结论误读为 B 的
+  useEffect(() => {
+    setTestResult(null)
+  }, [pid])
+
+  const handleTest = async () => {
+    if (testing) return
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const result = await testProviderConnection(pid, apiConfig)
+      setTestResult(result)
+      if (result.status === 'ok') toast.success(result.message)
+      else if (result.status === 'fail') toast.error(result.message)
+    } finally {
+      setTesting(false)
+    }
+  }
 
   const handleDetectComfy = async () => {
     setTestingComfy(true)
@@ -109,6 +150,10 @@ function SettingsPage() {
         title={`${meta.name} 连接配置`}
         actions={
           <div className="flex items-center gap-1.5">
+            <Button variant="outline" size="sm" onClick={handleTest} disabled={testing}>
+              <PlugZapIcon className="size-3.5" />
+              {testing ? '测试中…' : '测试连接'}
+            </Button>
             {pid === 'comfyui' && (
               <>
                 <Button variant="outline" size="sm" onClick={handleDetectComfy} disabled={testingComfy}>
@@ -211,6 +256,49 @@ function SettingsPage() {
           </Field>
         )}
       </Section>
+
+      {/* 测试连接结果：成功 / 失败 / 无法判定 三态 */}
+      {testResult && (
+        <div
+          className={`rounded-[18px] border px-4 py-3 text-xs leading-relaxed ${
+            testResult.status === 'ok'
+              ? 'border-emerald-500/30 bg-emerald-500/5'
+              : testResult.status === 'fail'
+                ? 'border-rose-500/30 bg-rose-500/5'
+                : 'border-border/60 bg-muted/50'
+          }`}
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              aria-hidden="true"
+              className={`size-2 shrink-0 rounded-full ${
+                testResult.status === 'ok'
+                  ? 'bg-emerald-500'
+                  : testResult.status === 'fail'
+                    ? 'bg-rose-500'
+                    : 'bg-amber-500'
+              }`}
+            />
+            <span className="font-semibold text-foreground">{testResult.message}</span>
+            <span className="ml-auto text-muted-foreground">
+              {testResult.latencyMs} ms
+              {typeof testResult.httpStatus === 'number' ? ` · HTTP ${testResult.httpStatus}` : ''}
+            </span>
+          </div>
+          {testResult.detail && <p className="mt-1.5 break-all text-muted-foreground">{testResult.detail}</p>}
+          {testResult.probe && (
+            <p className="mt-1 text-[11px] text-muted-foreground/80">探测方式：{testResult.probe}</p>
+          )}
+          <p className="mt-1 text-[11px] text-muted-foreground/80">
+            测试仅校验连通与鉴权，不发送生图请求、不产生生成费用；结果中的凭据已自动掩码。
+          </p>
+        </div>
+      )}
+
+      {/* 厂商能力边界提示 */}
+      {PROVIDER_NOTES[pid] && (
+        <p className="text-xs leading-relaxed text-muted-foreground">{PROVIDER_NOTES[pid]}</p>
+      )}
 
       {pid === 'comfyui' && (
         <p className="text-sm text-muted-foreground">模型由工作流决定。请返回合成台导入工作流，并设置人像、服装和姿势节点。</p>
