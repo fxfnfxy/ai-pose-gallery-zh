@@ -204,7 +204,19 @@ const PHOTO_STYLES = new Set(['realistic', 'fashion', 'film'])
 export function buildRecipePrompt(recipe: RecipeState, stylePreset = 'realistic', workflowImages: ExtraReferenceImage[] = []): string {
   const styleInfo = STYLE_PRESETS[stylePreset] ?? STYLE_PRESETS.realistic
   const isPhoto = PHOTO_STYLES.has(stylePreset)
-  const faceless = !recipe.portrait && !workflowImages.some((image) => image.role === 'character_sheet') && Boolean(recipe.costume && recipe.pose)
+  const hasBodyRefs = Boolean(recipe.costume || recipe.pose) || workflowImages.length > 0
+  // 无脸展示改为显式开关（recipe.facelessDisplay），不再因「只选了服装+姿势」自动进入——
+  // 实测旧逻辑会被模型执行成"无头/断颈"，用户侧完全不可预期。
+  const faceless =
+    Boolean(recipe.facelessDisplay) &&
+    !recipe.portrait &&
+    !workflowImages.some((image) => image.role === 'character_sheet') &&
+    hasBodyRefs
+  const needsVirtualModel =
+    !recipe.portrait &&
+    !faceless &&
+    !workflowImages.some((image) => image.role === 'character_sheet') &&
+    hasBodyRefs
   const clauses: string[] = []
   let idx = 1
   let costumeIdx = 0
@@ -228,6 +240,12 @@ export function buildRecipePrompt(recipe: RecipeState, stylePreset = 'realistic'
     )
     idx++
   }
+  if (needsVirtualModel) {
+    clauses.push(
+      '• 人物：生成一位完整的成年人物，头部、面部与五官完整自然（不使用任何真实人物长相，无需与参考图人物相似）；' +
+        '绝不可输出无头、断颈或人脸台造型，也不照搬服装图、姿势图中灰白人台的外观。'
+    )
+  }
   if (recipe.costume) {
     costumeIdx = idx
     clauses.push(
@@ -250,7 +268,10 @@ export function buildRecipePrompt(recipe: RecipeState, stylePreset = 'realistic'
     idx++
   }
   if (faceless) {
-    clauses.push('• 无脸展示：生成一位穿着参考服装的成年展示人物，脸部保持无五官的自然肤色表面，不添加眼睛、鼻子、嘴巴或具体人物身份；全身裸露皮肤的颜色统一，不照搬服装图或姿势图的灰白人台材质。')
+    clauses.push(
+      '• 无脸展示：生成一位穿着参考服装的成年展示人物；人物头部必须完整出现在画面中（发型与后脑勺自然，禁止输出无头、断颈的截断人体），' +
+        '仅面部不绘制眼睛、鼻子、嘴巴等五官，面部为平滑自然肤色表面；全身裸露皮肤的颜色统一，不照搬服装图或姿势图的灰白人台材质。'
+    )
   }
   for (const reference of workflowImages.filter((image) => image.role !== 'character_sheet')) {
     clauses.push(`• 工作流参考：参考图${idx}（${reference.name || '补充参考'}）中的相关元素，具体用途以工作流要求为准。`)
@@ -272,7 +293,7 @@ export function buildRecipePrompt(recipe: RecipeState, stylePreset = 'realistic'
     ...clauses,
   ]
   if (styleInfo.prompt) {
-    lines.push(`• 风格：${styleInfo.prompt} ${faceless ? '人物比例协调，手部自然，脸部无五官，光影统一。' : '人物比例协调，手部与五官自然，光影统一。'}`)
+    lines.push(`• 风格：${styleInfo.prompt} ${faceless ? '人物比例协调，头部完整，手部自然，面部无五官，光影统一。' : '人物比例协调，手部与五官自然，光影统一。'}`)
   }
   lines.push('画面中没有任何文字、标志或水印。')
   return lines.join('\n')
