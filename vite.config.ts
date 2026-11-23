@@ -25,7 +25,7 @@ const MIME: Record<string, string> = {
 // 2. 提供 /api/proxy 同源转发接口，解决 DashScope (Qwen) / 火山方舟 (Doubao) 官方接口的浏览器 CORS 限制
 function localAssetsAndProxyPlugin(): Plugin {
   const rootDir = import.meta.dirname
-  const prefixes = ['/data/', '/thumbs/', '/img/', '/og-cover.jpg', '/robots.txt', '/sitemap.xml']
+  const prefixes = ['/pose/data/', '/thumbs/', '/img/', '/og-cover.jpg', '/robots.txt', '/sitemap.xml']
 
   const handleProxy = async (req: any, res: any) => {
     try {
@@ -50,10 +50,38 @@ function localAssetsAndProxyPlugin(): Plugin {
     }
   }
 
+  // 开发环境取图中转：/api/fetch → NAS nas_save_server.py（纯 HTTP，无 TLS 问题）。
+  // 用途与生产一致：阿里云 OSS 结果域名只回单张证书，直连在严格 TLS 客户端下失败。
+  const imageFetchUpstream = process.env.POSE_FETCH_UPSTREAM || 'http://192.168.1.9:8136'
+
+  const handleImageFetchRelay = async (req: any, res: any) => {
+    try {
+      const upstream = await fetch(`${imageFetchUpstream}${req.url}`, {
+        method: 'GET',
+        headers: { accept: req.headers.accept || 'image/*,*/*;q=0.8' },
+      })
+      res.statusCode = upstream.status
+      upstream.headers.forEach((value, key) => {
+        if (!['content-encoding', 'transfer-encoding', 'connection'].includes(key.toLowerCase())) {
+          res.setHeader(key, value)
+        }
+      })
+      res.end(Buffer.from(await upstream.arrayBuffer()))
+    } catch (err: any) {
+      res.statusCode = 502
+      res.setHeader('Content-Type', 'application/json; charset=utf-8')
+      res.end(JSON.stringify({ error: err?.message || 'Image fetch relay failed' }))
+    }
+  }
+
   const serve = (req: any, res: any, next: any) => {
     const rawUrl = (req.url || '').split('?')[0]
     if (rawUrl === '/api/proxy') {
       void handleProxy(req, res)
+      return
+    }
+    if (rawUrl === '/api/fetch') {
+      void handleImageFetchRelay(req, res)
       return
     }
     const decoded = decodeURIComponent(rawUrl)
@@ -102,6 +130,7 @@ const comfyProxy = {
 }
 
 export default defineConfig({
+  base: '/pose/',
   publicDir: false,
   plugins: [
     localAssetsAndProxyPlugin(),
