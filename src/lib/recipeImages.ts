@@ -1,7 +1,7 @@
 import type { CostumeItem, PortraitItem, PoseItem, RecipeState } from '@/types/gallery'
 
 export function referenceImageUrl(src: string): string {
-  return /^(data:|blob:|https?:\/\/|\/)/i.test(src) ? src : `/${src}`
+  return /^(data:|blob:|https?:\/\/|\/)/i.test(src) ? src : `/pose/${src}`
 }
 
 export function poseThumbPath(pose: PoseItem, useDepth = Boolean(pose.useDepth)): string {
@@ -46,6 +46,7 @@ export function recipeBackup(recipe: RecipeState): RecipeState {
     portrait: recipe.portrait?.source === 'upload' ? null : recipe.portrait,
     costume: recipe.costume?.source === 'upload' ? null : recipe.costume,
     pose: recipe.pose?.source === 'upload' ? null : recipe.pose,
+    facelessDisplay: recipe.facelessDisplay === true,
     extraImages: [],
     workflowImages: {},
   }
