@@ -1,11 +1,10 @@
 import type { RecipeState } from '@/types/gallery'
+import { fetchRemoteImage } from './imageFetch'
 import { referenceImageUrl } from './recipeImages'
 
 export async function durableImage(url: string): Promise<string> {
   if (url.startsWith('data:image/')) return url
-  const response = await fetch(referenceImageUrl(url))
-  if (!response.ok) throw new Error('图片下载失败')
-  const blob = await response.blob()
+  const blob = await fetchRemoteImage(referenceImageUrl(url))
   if (!blob.type.startsWith('image/')) throw new Error('引用不是图片')
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
