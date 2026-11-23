@@ -105,6 +105,44 @@ export const PROVIDER_META: Record<
       { value: 'custom', label: '自定义名称（仅用于记录显示）' },
     ],
   },
+  zhipu: {
+    id: 'zhipu',
+    name: '智谱 GLM（CogView）',
+    shortName: '智谱',
+    defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    docUrl: 'https://docs.bigmodel.cn/api-reference/%E6%A8%A1%E5%9E%8B-api/%E5%9B%BE%E5%83%8F%E7%94%9F%E6%88%90',
+    models: [
+      { value: 'glm-image', label: 'glm-image（推荐）' },
+      { value: 'cogview-4', label: 'cogview-4' },
+      { value: 'cogview-4-250304', label: 'cogview-4-250304' },
+      { value: 'cogview-3-flash', label: 'cogview-3-flash（免费额度）' },
+      { value: 'custom', label: '自定义模型 ID' },
+    ],
+  },
+  minimax: {
+    id: 'minimax',
+    name: 'MiniMax（image-01）',
+    shortName: 'MiniMax',
+    defaultBaseUrl: 'https://api.minimax.cn/v1',
+    docUrl: 'https://platform.minimax.cn/docs/api-reference/image-generation-t2i',
+    models: [
+      { value: 'image-01', label: 'image-01' },
+      { value: 'custom', label: '自定义模型 ID' },
+    ],
+  },
+  openai_compat: {
+    id: 'openai_compat',
+    name: 'OpenAI 兼容 / 国内中转',
+    shortName: '兼容',
+    defaultBaseUrl: 'https://api.siliconflow.cn/v1',
+    docUrl: 'https://docs.siliconflow.cn/docs/api/images-generations-post',
+    models: [
+      { value: 'Qwen/Qwen-Image-Edit-2509', label: 'Qwen/Qwen-Image-Edit-2509（支持参考图）' },
+      { value: 'Qwen/Qwen-Image', label: 'Qwen/Qwen-Image（文生图）' },
+      { value: 'Kwai-Kolors/Kolors', label: 'Kwai-Kolors/Kolors（免费额度）' },
+      { value: 'custom', label: '自定义模型 ID' },
+    ],
+  },
 }
 
 export const STYLE_PRESETS: Record<string, { label: string; prompt: string }> = {
@@ -1831,6 +1869,114 @@ export async function generateCharacterImage(params: {
             ...(qw.negativePrompt.trim() ? { negative_prompt: qw.negativePrompt.trim() } : {}),
           },
         }),
+      },
+      config.useProxy
+    )
+    json = await res.json()
+  }
+  // =========================================================================
+  // 协议 5: 智谱 GLM / CogView (open.bigmodel.cn /api/paas/v4/images/generations)
+  // 注意：官方仅提供文生图，不支持参考图，此处不发送图片
+  // =========================================================================
+  else if (provider === 'zhipu') {
+    const zp = config.zhipuParams
+    const endpoint = baseUrl.includes('/images/generations') ? baseUrl : `${baseUrl}/images/generations`
+    res = await smartFetch(
+      endpoint,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          prompt,
+          size: zp.size,
+          quality: zp.quality,
+        }),
+      },
+      config.useProxy
+    )
+    json = await res.json()
+  }
+  // =========================================================================
+  // 协议 6: MiniMax image-01 (api.minimax.cn /v1/image_generation)
+  // 返回结构为 data.image_urls[]，需归一化为 OpenAI 形态
+  // =========================================================================
+  else if (provider === 'minimax') {
+    const mm = config.minimaxParams
+    const endpoint = baseUrl.endsWith('/image_generation')
+      ? baseUrl
+      : `${baseUrl.replace(/\/+$/, '')}/image_generation`
+    const payload: Record<string, any> = {
+      model,
+      prompt,
+      aspect_ratio: mm.aspectRatio,
+      response_format: mm.responseFormat === 'base64' ? 'base64' : 'url',
+      n: 1,
+      prompt_optimizer: mm.promptOptimizer,
+    }
+    if (mm.useSubjectReference && allImageRefs.length) {
+      payload.subject_reference = [{ type: 'character', image_file: allImageRefs[0] }]
+    }
+    res = await smartFetch(
+      endpoint,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(payload),
+      },
+      config.useProxy
+    )
+    json = await res.json()
+    if (res.ok) {
+      const urls = json?.data?.image_urls
+      if (Array.isArray(urls) && urls.length) {
+        // 归一化，复用统一的取图逻辑
+        json = mm.responseFormat === 'base64' ? { data: [{ b64_json: urls[0] }] } : { data: [{ url: urls[0] }] }
+      } else {
+        // MiniMax 业务错误放在 base_resp 内，HTTP 可能仍为 200
+        const bizMsg = json?.base_resp?.status_msg
+        if (bizMsg && json?.base_resp?.status_code !== 0) {
+          throw new Error(`[${PROVIDER_META[provider].shortName}] ${bizMsg}`)
+        }
+      }
+    }
+  }
+  // =========================================================================
+  // 协议 7: OpenAI 兼容生图 (任意 /v1/images/generations)
+  // 兼容硅基流动（image_size）、OpenAI（size）与常见中转站
+  // =========================================================================
+  else if (provider === 'openai_compat') {
+    const oc = config.openaiCompatParams
+    const root = baseUrl.replace(/\/+$/, '')
+    const v1 = /\/v\d+$/.test(root) ? root : `${root}/v1`
+    const payload: Record<string, any> = {
+      model,
+      prompt,
+      n: oc.n || 1,
+      response_format: oc.responseFormat,
+    }
+    if (oc.size && oc.size !== 'auto') {
+      // 同时下发两套字段名：OpenAI 用 size，硅基流动用 image_size
+      payload.size = oc.size
+      payload.image_size = oc.size
+    }
+    if (oc.negativePrompt.trim()) payload.negative_prompt = oc.negativePrompt.trim()
+    if (oc.sendReferenceImage && allImageRefs.length) payload.image = allImageRefs
+    res = await smartFetch(
+      `${v1}/images/generations`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(payload),
       },
       config.useProxy
     )
